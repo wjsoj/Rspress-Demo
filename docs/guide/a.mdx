@@ -1,0 +1,387 @@
+# 技术栈与工作流简介
+## 网站主体
+**Just rewrite everything in Rust!**
+
+使用字节跳动开源的Rspress进行静态网站构建，基于Rust工具链和React构建。原生支持MDX、全文搜索、深色模式切换，目前暂不考虑i18n。
+
+**MDX组件功能演示：**
+
+import Demo from '../../src/components/Demo'
+
+<Demo />
+
+## 微信公众号文章处理
+
+### 获取文章列表
+
+先前已有相关经验，目前共有两种方案，一种是利用拼接得到的公众号详情页（先从一篇文章中获取公众号的biz信息，然后代入拼接得到类似 https://mp.weixin.qq.com/mp/profile_ext?action=home&__biz={{biz}}#wechat_redirect 这样的链接）抽取文章信息，但涉及到APP内的特有登陆参数且不同公众号间参数不同，难以大规模爬取；另外一种是基于微信读书中公众号接口的方法，为方便重复爬取采用微信读书的方法。
+
+经过抓包得到接口地址如下：
+
+#### 1.搜索公众号
+
+```
+GET https://i.weread.qq.com/store/search
+```
+
+请求参数示例（其中sid为关键鉴权参数，每隔一段时间需要更新，实测单一参数可以满足一小时以内的连续请求，注意在请求时需通过URL Params形式携带）：
+
+```json
+{
+  "v": "2",
+  "scope": "2",
+  "count": "15",
+  "type": "0",
+  "keyword": "清华大学",
+  "sid": "F3t9w5AM77"
+}
+```
+
+请求头示例（使用手机为三星S22，与用户信息相关的参数经过处理，仅供展示用，accessToken为关键鉴权参数，vid则为用户身份标识，对于单一账号无需更改，其它参数都不需要更改）：
+
+```json
+{
+  "accessToken": "tfGAfGTN",
+  "vid": "401927136",
+  "baseapi": "34",
+  "appver": "8.2.0.10163577",
+  "User-Agent": "WeRead/8.2.0 WRBrand/samsung Dalvik/2.1.0 (Linux; U; Android 14; SM-S9010 Build/UP1A.231005.007)",
+  "osver": "14",
+  "channelId": "16",
+  "basever": "8.2.0.10163576",
+  "Host": "i.weread.qq.com",
+  "Connection": "Keep-Alive",
+  "Accept-Encoding": "gzip"
+}
+```
+
+响应示例：
+
+```json
+{
+    "parts": [
+        "清华大学",
+        "大学",
+        "清华"
+    ],
+    "books": [
+        {
+            "bookInfo": {
+                "bookId": "MP_WXS_3089223813",
+                "title": "清华大学",
+                "author": "公众号",
+                "cover": "http://wx.qlogo.cn/mmhead/Q3auHgzwzM5WZLLV8Zvx592ia2ibGxwjYX6fSRaiaqzsN5qOujG1q7Grw/0",
+                "intro": "自强不息，厚德载物。这里是清华大学！",
+                "publisher": "",
+                "price": 0,
+                "type": 3,
+                "payType": 32,
+                "bookStatus": 2,
+                "ispub": 0,
+                "cpid": 0,
+                "soldout": 0,
+                "format": "epub",
+                "finished": 0,
+                "paperBook": {
+                    "skuId": ""
+                }
+            },
+            "searchIdx": 1,
+            "hints": "1001|0|pre-ranking;|409152036_1718626559|F3t9w5AM77|related_id|itemtype=-1;",
+            "reason": "",
+            "searchReport": "eyJxdWVyeSI6Iua4heWNjuWkp+WtpiIsInF1ZXJ5X3VpZCI6IjQwOTE1MjAzNmJXQUdFMk03UnlHcjZsMCIsIml0ZW1faWR4IjoxLCJpdGVtX2lkIjoiTVBfV1hTXzMwODkyMjM4MTMiLCJpdGVtX3R5cGUiOjV9",
+            "type": 4,
+            "readingCount": 2,
+            "reading": 2
+        },
+        {
+            "bookInfo": {
+                "bookId": "MP_WXS_3272478936",
+                "title": "清华大学国情研究院",
+                "author": "公众号",
+                "cover": "http://wx.qlogo.cn/mmhead/Q3auHgzwzM6libanmoPYk9CcezO83sHO8RHWQjzEPQuI9mEGeX56d4w/0",
+                "intro": "清华大学国情研究院官方公众平台。研究院始终坚持“知识为民、知识报国、知识为人类”的宗旨，努力为国家重大决策做贡献，为学术创新做贡献，为培养优秀的中国研究人才做贡献，致力于建成具有清华特色的中国一流决策思想库和世界一流的当代中国研究基地。",
+                "publisher": "",
+                "price": 0,
+                "type": 3,
+                "payType": 32,
+                "bookStatus": 2,
+                "ispub": 0,
+                "cpid": 0,
+                "soldout": 0,
+                "format": "epub",
+                "finished": 0,
+                "paperBook": {
+                    "skuId": ""
+                }
+            },
+            "searchIdx": 2,
+            "hints": "1001|0|pre-ranking;|409152036_1718626559|F3t9w5AM77|related_id|itemtype=-1;",
+            "reason": "",
+            "searchReport": "eyJxdWVyeSI6Iua4heWNjuWkp+WtpiIsInF1ZXJ5X3VpZCI6IjQwOTE1MjAzNmJXQUdFMk03UnlHcjZsMCIsIml0ZW1faWR4IjoyLCJpdGVtX2lkIjoiTVBfV1hTXzMyNzI0Nzg5MzYiLCJpdGVtX3R5cGUiOjV9",
+            "type": 4,
+            "readingCount": 1,
+            "reading": 1
+        }
+    ],
+    "hasMore": 1,
+    "totalCount": 267,
+    "tabs": [
+        {
+            "scope": 0,
+            "name": "全部"
+        },
+        {
+            "scope": 10,
+            "name": "电子书"
+        },
+        {
+            "scope": 6,
+            "name": "作者"
+        },
+        {
+            "scope": 12,
+            "name": "全文"
+        },
+        {
+            "scope": 14,
+            "name": "微信听书"
+        },
+        {
+            "scope": 13,
+            "name": "书单"
+        },
+        {
+            "scope": 2,
+            "name": "公众号"
+        },
+        {
+            "scope": 4,
+            "name": "文章"
+        }
+    ],
+    "queryUid": "eyJxdWVyeSI6Iua4heWNjuWkp+WtpiIsInJhblU0ciI6IfWwTTE1MjAzNmJXQUdFMk03UnlHcjZsMCIsInNjb3BlIjoyfQ==",
+    "sid": "F3t9w5AM77"
+}
+```
+
+#### 2.获取公众号最近发布的文章
+
+```
+GET https://i.weread.qq.com/book/articles
+```
+
+请求参数示例（bookId为每个公众号的唯一标识，注意这里的Id与微信中获得的biz参数之间没有明显转换规律，需要单独获取，synckey应为鉴权关键参数，需要更新）：
+```json
+{
+  "count": "20",
+  "offset": "0",
+  "bookId": "MP_WXS_3089223813",
+  "synckey": "1716358721"
+}
+```
+
+请求头与公众号搜索的接口一致，实测accessToken值并不需要每一次请求都单独修改一次。最终得到响应结果示例如下：
+
+```json
+{
+    "reviews": [
+        {
+            "reviewId": "MP_WXS_3089223813_dH7nbOcNTGWT2kMRnCYT7g",
+            "review": {
+                "reviewId": "MP_WXS_3089223813_dH7nbOcNTGWT2kMRnCYT7g",
+                "userVid": 10003,
+                "type": 16,
+                "content": "",
+                "createTime": 1718548913,
+                "bookId": "",
+                "belongBookId": "MP_WXS_3089223813",
+                "mpInfo": {
+                    "originalId": "dH7nbOcNTGWT2kMRnCYT7g",
+                    "doc_url": "https://mp.weixin.qq.com/s?__biz=MzA4OTIyMzgxMw==&mid=2659323735&idx=1&sn=b667307dd08f35ce3acb2cdd544fc9d2&chksm=8b6888bdbc1f01ab1317cc80358405b313c98920cfe15387da2758e6b158764850fd30fc1715&scene=58&subscene=0#rd",
+                    "pic_url": "https://mmbiz.qpic.cn/sz_mmbiz_jpg/HhoEMZZMsiaQycBEHYWDut1CGvUdQJwEKgH2xVAfrjxricPoISeC5S7gB9kDvKN29tR2NhUSMiaSdSIiathcr3755w/0?wx_fmt=jpeg",
+                    "title": "早知道",
+                    "content": "",
+                    "mp_name": "清华大学",
+                    "avatar": "http://wx.qlogo.cn/mmhead/Q3auHgzwzM5WZLLV8Zvx592ia2ibGxwjYX6fSRaiaqzsN5qOujG1q7Grw/0",
+                    "time": 1718548913,
+                    "payType": 0,
+                    "inner": 0
+                },
+                "score": 1718548913,
+                "mpRank": 1,
+                "topics": [],
+                "isLike": 0,
+                "isReposted": 0,
+                "book": {
+                    "bookId": "",
+                    "format": "",
+                    "version": 0,
+                    "soldout": 0,
+                    "type": 0,
+                    "payType": 0,
+                    "cover": "",
+                    "title": "",
+                    "author": ""
+                },
+                "author": {
+                    "userVid": 10003,
+                    "name": "MP",
+                    "avatar": "",
+                    "isFollowing": 0,
+                    "isFollower": 0,
+                    "isBlacking": 0,
+                    "isBlackBy": 0,
+                    "isHide": 1,
+                    "isV": 0,
+                    "roleTags": [],
+                    "followPromote": "",
+                    "signature": ""
+                }
+            }
+        },
+        {
+            "reviewId": "MP_WXS_3089223813_i8R6I8eaYl5QXiH-pBdPVg",
+            "review": {
+                "reviewId": "MP_WXS_3089223813_i8R6I8eaYl5QXiH-pBdPVg",
+                "userVid": 10003,
+                "type": 16,
+                "content": "",
+                "createTime": 1716947421,
+                "bookId": "",
+                "belongBookId": "MP_WXS_3089223813",
+                "mpInfo": {
+                    "originalId": "i8R6I8eaYl5QXiH-pBdPVg",
+                    "doc_url": "https://mp.weixin.qq.com/s?__biz=MzA4OTIyMzgxMw==&mid=2659322548&idx=1&sn=0879a4abe5f83f00e30f954d2f0079c4&chksm=8b688d5ebc1f04481ed0aaef390fd6b9ab23c7ceba06045ac74349bbc796cac1e539fcd70e2e&scene=58&subscene=0#rd",
+                    "pic_url": "https://mmbiz.qpic.cn/sz_mmbiz_jpg/HhoEMZZMsiaSfIjM7YeOfloiaIzOUpxeic5yv8qHJEFEHcMYh5EB4kpI7MohwhGG08vWa1hqjHNzG3oGcNK6uaNog/0?wx_fmt=jpeg",
+                    "title": "清华博士毕业去工地！一干就是十年",
+                    "content": "",
+                    "mp_name": "清华大学",
+                    "avatar": "http://wx.qlogo.cn/mmhead/Q3auHgzwzM5WZLLV8Zvx592ia2ibGxwjYX6fSRaiaqzsN5qOujG1q7Grw/0",
+                    "time": 1716947421,
+                    "payType": 0,
+                    "inner": 0
+                },
+                "score": 1716947421,
+                "mpRank": 22,
+                "topics": [],
+                "isLike": 0,
+                "isReposted": 0,
+                "book": {
+                    "bookId": "",
+                    "format": "",
+                    "version": 0,
+                    "soldout": 0,
+                    "type": 0,
+                    "payType": 0,
+                    "cover": "",
+                    "title": "",
+                    "author": ""
+                },
+                "author": {
+                    "userVid": 10003,
+                    "name": "MP",
+                    "avatar": "",
+                    "isFollowing": 0,
+                    "isFollower": 0,
+                    "isBlacking": 0,
+                    "isBlackBy": 0,
+                    "isHide": 1,
+                    "isV": 0,
+                    "roleTags": [],
+                    "followPromote": "",
+                    "signature": ""
+                }
+            }
+        }
+    ],
+    "clearAll": 1,
+    "synckey": 1718627005
+}
+```
+
+
+### 文章抓取和处理
+
+上一步已经获取到了公众号最新更新的文章链接，下一步是将对应的网页抓取下来。观察发现虽然网页代码直接抓下来有2000多行，但大部分都是负责统计和交互的，没有实际用处，真正有用的内容只有几行，包裹在如下所示的div元素中（原始代码的缩进就是这么抽象，实际上核心内容只有非常长的一行）：
+
+```html
+<div class="rich_media_content js_underline_content
+            defaultNoSetting
+"
+id="js_content" style="visibility: hidden; opacity: 0; ">
+{{公众号文章内容}}
+</div>
+```
+
+由于Rspress采用React为基础且使用ts为主要语言，需要进行html到jsx的转换，这里使用开源项目[transform](https://transform.tools/html-to-jsx)完成。转换完成后发现微信采用的许多标签属性写法不符合ts标准的类型定义，首先需要删除位于最后的如下内容：
+
+```html
+<p style={{ display: "none" }}>
+    <mp-style-type data-value={10000} />
+</p>
+```
+
+然后再把`<img>`标签的`data-src`属性改为标准的`src`属性。其他的标签如果没有特别影响观看体验可以暂时不用更改，对于svg中可能出现的引发类型报错的属性值，直接删除即可。
+
+### 图片展示问题
+
+到这里网页已经基本可以看了，如果字体颜色在深色和浅色模式切换时出现异常，可能是公众号所有者在排版的时候固定了文字的颜色，删除颜色属性或自己指定颜色值即可解决此问题。然而此时还有一个重大问题是网页中的图片完全没法查看，具体来说你看到的图片效果是这样的：
+
+<img src="https://t12.baidu.com/it/u=3916092102,177108088&fm=30&app=106&f=JPEG?w=280&h=280&s=C8231F70490E464D5C5511D30000E0B1"/>
+
+这是由于微信做了防盗链处理来限制外部网站展示其图床中的照片，由于微信未做较为严苛的限制，直接访问图片链接并不会被阻拦，所以可以较为轻易的绕过这一限制，只需在网页代码中加入下列元数据即可：
+
+```html
+<meta name="renderer" content="webkit" />
+<meta name="referrer" content="never" />
+```
+
+然而对于元素内联样式设置的`backgroundImage`属性，由于css安全策略的不同，并不会受到元数据设置的影响，为解决这一问题，必须采用反向代理等方式，在服务端去掉`referer`头后将请求转发，为此直接从网上抄了一段代码，部署在Cloudflare Workers上（注意需要有自己的域名，使用时将目标链接拼接在域名的后边即可）：
+
+```js
+addEventListener('fetch', event => {
+  event.respondWith(handleRequest(event.request))
+})
+const specialCases = {
+  "*": {
+    "Origin": "DELETE",
+    "Referer": "DELETE"
+  }
+}
+function handleSpecialCases(request) {
+  const url = new URL(request.url);
+  const rules = specialCases[url.hostname] || specialCases["*"];
+  for (const [key, value] of Object.entries(rules)) {
+    switch (value) {
+      case "KEEP":
+        break;
+      case "DELETE":
+        request.headers.delete(key);
+        break;
+      default:
+        request.headers.set(key, value);
+        break;
+    }
+  }
+}
+async function handleRequest(request) {
+  const url = new URL(request.url);
+  if (url.pathname === "/") {
+    return new Response("Please enter the link after the /")
+  };
+  const actualUrlStr = url.pathname.replace("/", "") + url.search + url.hash;
+  const actualUrl = new URL(actualUrlStr);
+  const modifiedRequest = new Request(actualUrl, {
+    headers: request.headers,
+    method: request.method,
+    body: request.body,
+    redirect: 'follow'
+  });
+  handleSpecialCases(modifiedRequest);
+  const response = await fetch(modifiedRequest);
+  const modifiedResponse = new Response(response.body, response);
+  modifiedResponse.headers.set('Access-Control-Allow-Origin', '*');
+  return modifiedResponse;
+}
+```

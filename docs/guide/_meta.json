@@ -1,0 +1,17 @@
+[
+  {
+    "type": "file",
+    "name": "a",
+    "label": "简介"
+  },
+  {
+    "type": "dir",
+    "name": "account",
+    "label": "公众号文章"
+  },
+  {
+    "type": "file",
+    "name": "index",
+    "label": "MDX"
+  }
+]
